@@ -9,9 +9,9 @@ use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
 use static_cell::StaticCell;
-use trouble_example_apps::ble_bas_peripheral;
+use trouble_example_apps::ble_scanner;
 use trouble_host::prelude::ExternalController;
-use {defmt_rtt as _, panic_probe as _};
+use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => InterruptHandler<PIO0>;
@@ -37,9 +37,9 @@ async fn main(spawner: Spawner) {
         // are available in `./examples/rp-pico-2-w`. (should be automatic)
         //
         // IMPORTANT
-        let fw = include_bytes!("../../cyw43-firmware/43439A0.bin");
-        let clm = include_bytes!("../../cyw43-firmware/43439A0_clm.bin");
-        let btfw = include_bytes!("../../cyw43-firmware/43439A0_btfw.bin");
+        let fw = cyw43_firmware::CYW43_43439A0;
+        let clm = cyw43_firmware::CYW43_43439A0_CLM;
+        let btfw = cyw43_firmware::CYW43_43439A0_BTFW;
         (fw, clm, btfw)
     };
 
@@ -60,10 +60,10 @@ async fn main(spawner: Spawner) {
     static STATE: StaticCell<cyw43::State> = StaticCell::new();
     let state = STATE.init(cyw43::State::new());
     let (_net_device, bt_device, mut control, runner) = cyw43::new_with_bluetooth(state, pwr, spi, fw, btfw).await;
-    spawner.spawn(unwrap!(cyw43_task(runner)));
+    unwrap!(spawner.spawn(cyw43_task(runner)));
     control.init(clm).await;
 
     let controller: ExternalController<_, 10> = ExternalController::new(bt_device);
 
-    ble_bas_peripheral::run(controller).await;
+    ble_scanner::run(controller).await;
 }

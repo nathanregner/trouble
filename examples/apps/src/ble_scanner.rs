@@ -55,12 +55,29 @@ impl EventHandler for Printer {
         let mut seen = self.seen.borrow_mut();
         while let Some(Ok(report)) = it.next() {
             if seen.iter().find(|b| b.raw() == report.addr.raw()).is_none() {
-                info!("discovered: {:?}", report.addr);
+                info!("discovered: {:x}", MacAddress(report.addr));
                 if seen.is_full() {
                     seen.pop_front();
                 }
                 seen.push_back(report.addr).unwrap();
             }
         }
+    }
+}
+
+struct MacAddress(BdAddr);
+
+impl defmt::Format for MacAddress {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(
+            fmt,
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            self.0.raw()[0],
+            self.0.raw()[1],
+            self.0.raw()[2],
+            self.0.raw()[3],
+            self.0.raw()[4],
+            self.0.raw()[5],
+        )
     }
 }

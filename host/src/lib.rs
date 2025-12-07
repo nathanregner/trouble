@@ -433,6 +433,8 @@ pub trait Controller:
     + ControllerCmdSync<LeCreateConnCancel>
     + ControllerCmdSync<LeSetScanEnable>
     + ControllerCmdSync<LeSetExtScanEnable>
+    + ControllerCmdSync<LeSetExtScanParams>
+    + ControllerCmdSync<LeSetScanParams>
     + ControllerCmdAsync<LeCreateConn>
     + ControllerCmdSync<LeClearFilterAcceptList>
     + ControllerCmdSync<LeAddDeviceToFilterAcceptList>
@@ -469,6 +471,8 @@ impl<
             + ControllerCmdSync<ReadRssi>
             + ControllerCmdSync<LeSetScanEnable>
             + ControllerCmdSync<LeSetExtScanEnable>
+            + ControllerCmdSync<LeSetExtScanParams>
+            + ControllerCmdSync<LeSetScanParams>
             + ControllerCmdSync<LeCreateConnCancel>
             + ControllerCmdAsync<LeCreateConn>
             + for<'t> ControllerCmdSync<LeSetAdvEnable>

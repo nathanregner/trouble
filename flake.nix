@@ -1,7 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
-    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
     fenix = {
       url = "github:nix-community/fenix";
@@ -21,7 +20,6 @@
       fenix,
       flake-parts,
       nixpkgs,
-      nixpkgs-unstable,
       treefmt-nix,
       ...
     }:
@@ -46,23 +44,7 @@
           # https://flake.parts/overlays#consuming-an-overlay
           _module.args.pkgs = import nixpkgs {
             inherit system;
-            overlays = [
-              fenix.overlays.default
-              (stableFinal: _stablePrev: {
-                unstable = import nixpkgs-unstable {
-                  inherit system;
-                  overlays = [
-                    (
-                      final: prev:
-                      lib.optionalAttrs prev.stdenv.hostPlatform.isDarwin {
-                        # https://github.com/NixOS/nixpkgs/pull/457704
-                        inherit (stableFinal) uhd;
-                      }
-                    )
-                  ];
-                };
-              })
-            ];
+            overlays = [ fenix.overlays.default ];
           };
 
           treefmt = {
@@ -76,41 +58,6 @@
               taplo.enable = true;
             };
           };
-
-          packages =
-            let
-              toolchain = pkgs.fenix.complete.withComponents [
-                "cargo"
-                "rustc"
-              ];
-              rustPlatform = (
-                pkgs.makeRustPlatform {
-                  cargo = toolchain;
-                  rustc = toolchain;
-                }
-              );
-            in
-            {
-              # inherit (pkgs.unstable) uhd;
-
-              pdu-utils = pkgs.unstable.gnuradioPackages.callPackage ./packages/pdu-utils/package.nix { };
-
-              # default = rustPlatform.buildRustPackage {
-              #   pname = "";
-              #   version = "0.1.0";
-              #   src = lib.fileset.toSource {
-              #     root = ./.;
-              #     fileset = lib.fileset.unions [
-              #       ./Cargo.lock
-              #       ./Cargo.toml
-              #       ./src
-              #       ./tests
-              #     ];
-              #   };
-              #
-              #   cargoLock.lockFile = ./Cargo.lock;
-              # };
-            };
 
           devShells.default =
             let
@@ -130,13 +77,13 @@
             in
             pkgs.mkShell {
               buildInputs = with pkgs; [
-                pkg-config
-                openssl
-                openssl.dev
                 cargo-insta
                 flip-link
-                probe-rs
-                pkgs.unstable.rust-analyzer
+                openssl
+                openssl.dev
+                pkg-config
+                probe-rs-tools
+                rust-analyzer
               ];
               env.RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
             };

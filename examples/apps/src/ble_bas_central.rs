@@ -1,6 +1,6 @@
 use embassy_futures::join::join;
 use embassy_time::{Duration, Timer};
-use trouble_host::prelude::*;
+use trouble_host::{prelude::*, scan};
 
 /// Max number of connections
 const CONNECTIONS_MAX: usize = 1;
@@ -25,62 +25,40 @@ where
         ..
     } = stack.build();
 
-    // NOTE: Modify this to match the address of the peripheral you want to connect to.
-    // Currently it matches the address used by the peripheral examples
-    let target: Address = Address::random([0xff, 0x8f, 0x1a, 0x05, 0xe4, 0xff]);
-
+    let addr = BdAddr::new([0x00, 0x1F, 0xE2, 0x9F, 0x8A, 0x66]);
     let config = ConnectConfig {
         connect_params: Default::default(),
         scan_config: ScanConfig {
-            filter_accept_list: &[(target.kind, &target.addr)],
+            filter_accept_list: &[
+                (AddrKind::PUBLIC, &addr),
+                (AddrKind::RANDOM, &addr),
+                (AddrKind::RESOLVABLE_PRIVATE_OR_PUBLIC, &addr),
+                (AddrKind::RESOLVABLE_PRIVATE_OR_RANDOM, &addr),
+                (AddrKind::ANONYMOUS_ADV, &addr),
+            ],
             ..Default::default()
         },
     };
 
     info!("Scanning for peripheral...");
     let _ = join(runner.run(), async {
-        info!("Connecting");
+        let mut scanner = Scanner::new(central);
+        loop {
+            info!("Scanning...");
+            let result = scanner.scan(&ScanConfig { ..Default::default() }).await;
 
-        let conn = central.connect(&config).await.unwrap();
-        info!("Connected, creating gatt client");
-
-        let client = GattClient::<C, DefaultPacketPool, 10>::new(&stack, &conn)
-            .await
-            .unwrap();
-
-        let _ = join(client.task(), async {
-            info!("Looking for battery service");
-            let services = client.services_by_uuid(&Uuid::new_short(0x180f)).await.unwrap();
-            let service = services.first().unwrap().clone();
-
-            info!("Looking for value handle");
-            let c: Characteristic<u8> = client
-                .characteristic_by_uuid(&service, &Uuid::new_short(0x2a19))
-                .await
-                .unwrap();
-
-            info!("Subscribing notifications");
-            let mut listener = client.subscribe(&c, false).await.unwrap();
-
-            let _ = join(
-                async {
-                    loop {
-                        let mut data = [0; 1];
-                        client.read_characteristic(&c, &mut data[..]).await.unwrap();
-                        info!("Read value: {}", data[0]);
-                        Timer::after(Duration::from_secs(10)).await;
+            let session = match result {
+                Ok(res) => res,
+                Err(err) => {
+                    match err {
+                        BleHostError::Controller(err) => warn!("Controller error"),
+                        BleHostError::BleHost(err) => warn!("BleHost: {}", err),
                     }
-                },
-                async {
-                    loop {
-                        let data = listener.next().await;
-                        info!("Got notification: {:?} (val: {})", data.as_ref(), data.as_ref()[0]);
-                    }
-                },
-            )
-            .await;
-        })
-        .await;
+                    continue;
+                }
+            };
+            session;
+        }
     })
     .await;
 }

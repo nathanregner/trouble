@@ -803,6 +803,7 @@ impl<'d, C: Controller, P: PacketPool> RxRunner<'d, C, P> {
             //     trace!("[host] time since last poll was {} us", elapsed);
             // }
             let result = host.controller.read(&mut rx).await;
+            info!("[host] rx::run");
             // last = Instant::now();
             //        trace!("[host] polling took {} ms", (polled - started).as_millis());
             match result {
@@ -1050,12 +1051,15 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
             + ControllerCmdSync<ReadBdAddr>,
     {
         let host = &self.stack.host;
+        info!("reset");
         Reset::new().exec(&host.controller).await?;
 
         if let Some(addr) = host.address {
+            info!("set addr");
             LeSetRandomAddr::new(addr.addr).exec(&host.controller).await?;
         }
 
+        info!("set event mask");
         SetEventMask::new(
             EventMask::new()
                 .enable_le_meta(true)
@@ -1068,6 +1072,7 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
         .exec(&host.controller)
         .await?;
 
+        info!("set event mask");
         SetEventMaskPage2::new(EventMaskPage2::new().enable_encryption_change_v2(true))
             .exec(&host.controller)
             .await?;
@@ -1240,6 +1245,7 @@ impl<'d, C: Controller, P: PacketPool> TxRunner<'d, C, P> {
         let params = host.initialized.get().await;
         loop {
             let (conn, pdu) = host.connections.outbound().await;
+            info!("[host] tx::run");
             match host.l2cap(conn, pdu.len() as u16, 1).await {
                 Ok(mut sender) => {
                     if let Err(e) = sender.send(pdu.as_ref()).await {
