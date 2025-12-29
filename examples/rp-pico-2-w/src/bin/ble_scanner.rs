@@ -26,22 +26,9 @@ async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'stat
 async fn main(spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    #[cfg(feature = "skip-cyw43-firmware")]
-    let (fw, clm, btfw) = (&[], &[], &[]);
-
-    #[cfg(not(feature = "skip-cyw43-firmware"))]
-    let (fw, clm, btfw) = {
-        // IMPORTANT
-        //
-        // Download and make sure these files from https://github.com/embassy-rs/embassy/tree/main/cyw43-firmware
-        // are available in `./examples/rp-pico-2-w`. (should be automatic)
-        //
-        // IMPORTANT
-        let fw = cyw43_firmware::CYW43_43439A0;
-        let clm = cyw43_firmware::CYW43_43439A0_CLM;
-        let btfw = cyw43_firmware::CYW43_43439A0_BTFW;
-        (fw, clm, btfw)
-    };
+    let fw = cyw43_firmware::CYW43_43439A0;
+    let clm = cyw43_firmware::CYW43_43439A0_CLM;
+    let btfw = cyw43_firmware::CYW43_43439A0_BTFW;
 
     let pwr = Output::new(p.PIN_23, Level::Low);
     let cs = Output::new(p.PIN_25, Level::High);

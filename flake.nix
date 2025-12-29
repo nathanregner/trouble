@@ -77,11 +77,8 @@
             in
             pkgs.mkShell {
               buildInputs = with pkgs; [
-                cargo-insta
                 flip-link
-                openssl
-                openssl.dev
-                pkg-config
+                gdb
                 probe-rs-tools
                 rust-analyzer
               ];

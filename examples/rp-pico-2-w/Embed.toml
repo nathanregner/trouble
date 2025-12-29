@@ -1,0 +1,34 @@
+[default.general]
+chip = "RP235x"
+
+[default.gdb]
+enabled = true # Start a GDB server after flashing the chip
+
+[default.rtt]
+enabled = true
+log_enabled = true
+
+# Debug
+
+[reset.rtt]
+enabled = true
+
+[reset.flashing]
+enabled = false
+
+[reset.reset]
+enabled = true
+halt_afterwards = false
+
+# Attach-only profile
+
+[attach.rtt]
+enabled = true
+log_enabled = true
+
+[attach.flashing]
+enabled = false
+
+[attach.reset]
+enabled = false # Ensures the target is reset when cargo embed runs
+# halt_afterwards = true # Set to true if you want the chip to stop at the start

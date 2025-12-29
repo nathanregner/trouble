@@ -1,29 +1,31 @@
 #![no_std]
 #![no_main]
 
-use bt_hci::cmd::controller_baseband::Reset;
+use core::arch::asm;
+
+use bt_hci::cmd::controller_baseband::{Reset, SetEventMask};
 use bt_hci::cmd::info::ReadBdAddr;
-use bt_hci::cmd::le::{LeSetAdvSetRandomAddr, LeSetRandomAddr};
+use bt_hci::cmd::le::{LeReadBufferSize, LeSetAdvSetRandomAddr, LeSetRandomAddr};
 use bt_hci::cmd::SyncCmd;
 use bt_hci::controller::{Controller, ControllerCmdSync};
+use bt_hci::param::EventMask;
 use bt_hci::ControllerToHostPacket;
 use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::bind_interrupts;
+use embassy_futures::select::select;
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::peripherals::{DMA_CH0, PIO0};
 use embassy_rp::pio::{InterruptHandler, Pio};
+use embassy_rp::{bind_interrupts, install_core0_stack_guard};
 use static_cell::StaticCell;
 use trouble_host::prelude::ExternalController;
 use trouble_host::Address;
 use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
-bind_interrupts!(
-    struct Irqs {
-        PIO0_IRQ_0 => InterruptHandler<PIO0>;
-    }
-);
+bind_interrupts!(struct Irqs {
+    PIO0_IRQ_0 => InterruptHandler<PIO0>;
+});
 
 #[embassy_executor::task]
 async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'static, PIO0, 0, DMA_CH0>>) -> ! {
@@ -32,6 +34,8 @@ async fn cyw43_task(runner: cyw43::Runner<'static, Output<'static>, PioSpi<'stat
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    defmt::expect!(install_core0_stack_guard(), "MPU already configured");
+
     let p = embassy_rp::init(Default::default());
 
     let fw = cyw43_firmware::CYW43_43439A0;
@@ -58,29 +62,46 @@ async fn main(spawner: Spawner) {
     unwrap!(spawner.spawn(cyw43_task(runner)));
     control.init(clm).await;
 
+    // cortex_m::asm::bkpt();
+
     let controller: ExternalController<_, 10> = ExternalController::new(bt_device);
-    if let Err(err) = controller(&controller).await {
-        defmt::error!("{}", err);
-    }
-    defmt::info!("init done");
+    select(run_controller(&controller), run_rx(&controller)).await;
+    defmt::error!("EXITED");
 }
 
 async fn run_controller<C>(controller: &C) -> Result<(), bt_hci::cmd::Error<C::Error>>
 where
-    C: ControllerCmdSync<Reset>,
+    C: ControllerCmdSync<LeReadBufferSize>,
     C: ControllerCmdSync<LeSetRandomAddr>,
     C: ControllerCmdSync<ReadBdAddr>,
+    C: ControllerCmdSync<Reset>,
+    C: ControllerCmdSync<SetEventMask>,
 {
     defmt::info!("resetting...");
     Reset::new().exec(controller).await?;
 
-    // defmt::info!("setting random address...");
-    // let addr = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
-    // LeSetRandomAddr::new(addr.addr).exec(controller).await?;
+    defmt::info!("setting random address...");
+    let addr = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
+    LeSetRandomAddr::new(addr.addr).exec(controller).await?;
 
-    defmt::info!("reading...");
-    let device_address = ReadBdAddr::new().exec(controller).await?;
-    defmt::dbg!(device_address);
+    info!("set event mask");
+    SetEventMask::new(
+        EventMask::new()
+            .enable_le_meta(true)
+            .enable_conn_request(true)
+            .enable_conn_complete(true)
+            .enable_hardware_error(true)
+            .enable_disconnection_complete(true)
+            .enable_encryption_change_v1(true),
+    )
+    .exec(controller)
+    .await?;
+
+    let ret = LeReadBufferSize::new().exec(controller).await?;
+
+    // defmt::info!("reading...");
+    // let device_address = ReadBdAddr::new().exec(controller).await?;
+    // defmt::dbg!(device_address);
 
     core::future::pending::<()>().await;
     Ok(())
@@ -102,4 +123,11 @@ where
             }
         }
     }
+}
+
+pub async fn run_tx<C>(controller: &C) -> Result<(), bt_hci::cmd::Error<C::Error>>
+where
+    C: Controller,
+{
+    Ok(())
 }
