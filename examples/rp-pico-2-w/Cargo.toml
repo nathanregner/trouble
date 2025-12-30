@@ -5,8 +5,9 @@ edition = "2021"
 resolver = "2"
 
 [[bin]]
-name = "bt-classic"
-path = "./src/bin/bt_classic.rs"
+name = "bt_classic"
+bench = false
+doctest = false
 test = false
 
 [dependencies]
@@ -17,8 +18,8 @@ embassy-futures = "0.1.2"
 embassy-sync = { version = "0.7", features = ["defmt"] }
 heapless = "0.8"
 
-futures = { version = "0.3", default-features = false, features = ["async-await"]}
-trouble-example-apps= { version = "0.1.0", path = "../apps", features = ["defmt"] }
+futures = { version = "0.3", default-features = false, features = ["async-await"] }
+trouble-example-apps = { version = "0.1.0", path = "../apps", features = ["defmt"] }
 trouble-host = { path = "../../host", features = ["default-packet-pool-mtu-128"] }
 cyw43 = { version = "0.6", features = ["defmt", "firmware-logs", "bluetooth"] }
 cyw43-pio = { version = "0.9", features = ["defmt"] }
@@ -38,7 +39,7 @@ bt-hci = { version = "0.6.0", features = ["defmt", "embassy-time"] }
 embedded-io = { version = "0.7.1", features = ["defmt"] }
 
 [build-dependencies]
-reqwest = { version = "0.12.9", features = ["blocking"]}
+reqwest = { version = "0.12.9", features = ["blocking"] }
 
 [features]
 skip-cyw43-firmware = []

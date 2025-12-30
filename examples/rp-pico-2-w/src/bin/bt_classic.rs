@@ -9,7 +9,7 @@ use bt_hci::cmd::SyncCmd;
 use bt_hci::controller::{Controller, ControllerCmdSync};
 use bt_hci::event::{EventPacket, ExtendedInquiryResult, InquiryComplete, InquiryResult};
 use bt_hci::param::{BdAddr, EventMask, RemainingBytes};
-use bt_hci::{ControllerToHostPacket, FromHciBytes, WriteHci};
+use bt_hci::{ControllerToHostPacket, FromHciBytes};
 use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
 use defmt::*;
 use embassy_executor::Spawner;
@@ -128,12 +128,9 @@ where
     // let device_address = ReadBdAddr::new().exec(controller).await?;
     // defmt::dbg!(device_address);
 
-    // WriteInquiryMode not available in bt-hci 0.6.0, so we implement it manually
-    // Opcode: 0x0C45 (OGF: 0x03, OCF: 0x45)
-    // Parameter: 0x02 for Extended Inquiry mode
-    info!("Setting inquiry mode to Extended (0x02)...");
-    write_inquiry_mode(controller, 0x02).await?;
-
+    // Note: WriteInquiryMode not available in bt-hci 0.6.0
+    // The code handles both standard InquiryResult and ExtendedInquiryResult events
+    // depending on what the controller supports/defaults to
     info!("Starting continuous Bluetooth Classic inquiry...");
 
     loop {
@@ -183,6 +180,45 @@ async fn handle_event(
     use bt_hci::event::EventKind;
 
     match event.kind {
+        EventKind::InquiryResult => {
+            // Handle standard inquiry results (fallback if Extended mode doesn't work)
+            match InquiryResult::from_hci_bytes_complete(event.data) {
+                Ok(result) => {
+                    let mut devices = discovered_devices.lock().await;
+                    for item in result.iter() {
+                        if !devices.contains(&item.bd_addr) {
+                            if let Some(class) = item.class_of_device {
+                                info!(
+                                    "Discovered (standard): {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} | Class: {:02x}{:02x}{:02x}",
+                                    item.bd_addr.raw()[0],
+                                    item.bd_addr.raw()[1],
+                                    item.bd_addr.raw()[2],
+                                    item.bd_addr.raw()[3],
+                                    item.bd_addr.raw()[4],
+                                    item.bd_addr.raw()[5],
+                                    class[0],
+                                    class[1],
+                                    class[2],
+                                );
+                            } else {
+                                info!(
+                                    "Discovered (standard): {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+                                    item.bd_addr.raw()[0],
+                                    item.bd_addr.raw()[1],
+                                    item.bd_addr.raw()[2],
+                                    item.bd_addr.raw()[3],
+                                    item.bd_addr.raw()[4],
+                                    item.bd_addr.raw()[5],
+                                );
+                            }
+                            devices.insert(item.bd_addr).ok();
+                        }
+                    }
+                }
+                Err(e) => warn!("Failed to parse InquiryResult: {:?}", e),
+            }
+        }
+
         EventKind::ExtendedInquiryResult => {
             match ExtendedInquiryResult::from_hci_bytes_complete(event.data) {
                 Ok(result) => {
