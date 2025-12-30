@@ -9,7 +9,7 @@ use bt_hci::cmd::SyncCmd;
 use bt_hci::controller::{Controller, ControllerCmdSync};
 use bt_hci::event::{EventPacket, ExtendedInquiryResult, InquiryComplete, InquiryResult};
 use bt_hci::param::{BdAddr, EventMask, RemainingBytes};
-use bt_hci::{ControllerToHostPacket, FromHciBytes, HostToControllerPacket, PacketKind};
+use bt_hci::{ControllerToHostPacket, FromHciBytes};
 use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
 use defmt::*;
 use embassy_executor::Spawner;
@@ -25,7 +25,6 @@ use embassy_time::{Duration, Timer};
 use heapless::FnvIndexSet;
 use static_cell::StaticCell;
 use trouble_host::prelude::ExternalController;
-use trouble_host::Address;
 use {defmt_rtt as _, embassy_time as _, panic_probe as _};
 
 const MAX_HCI_PACKET_LEN: usize = 259;
@@ -173,26 +172,33 @@ where
     info!("setting inquiry scan type...");
     WriteInquiryScanType::new(0x01).exec(controller).await?;
 
-    // Set inquiry mode to standard (with RSSI would be 0x01, but controller doesn't support extended)
-    info!("setting inquiry mode to 0x01 (RSSI)...");
-    write_inquiry_mode(controller, 0x01).await?;
+    // Set inquiry mode to standard (0x00)
+    // Note: Controller doesn't support Extended Inquiry (0x02), trying standard mode
+    info!("setting inquiry mode to 0x00 (standard)...");
+    write_inquiry_mode(controller, 0x00).await?;
 
-    // Enable inquiry and page scan
+    // Enable page scan only initially so we're connectable but not discoverable during inquiry
     // 0x00 = No scans, 0x01 = Inquiry scan only, 0x02 = Page scan only, 0x03 = Both
-    info!("enabling inquiry and page scan...");
-    write_scan_enable(controller, 0x03).await?;
+    info!("enabling page scan only (connectable but not discoverable)...");
+    write_scan_enable(controller, 0x02).await?;
 
     info!("Starting continuous Bluetooth Classic inquiry...");
 
     loop {
+        // Disable all scanning during active inquiry
+        write_scan_enable(controller, 0x00).await?;
+
         // Send Inquiry command
-        // LAP: [0x9e, 0x8b, 0x33] = General/Unlimited Inquiry Access Code
-        // inquiry_length: 0x08 = 10.24 seconds
+        // LAP: GIAC 0x9E8B33 in little-endian = [0x33, 0x8B, 0x9E]
+        // inquiry_length: 0x08 = 10.24 seconds (units of 1.28s)
         // num_responses: 0x00 = unlimited
-        Inquiry::new([0x9e, 0x8b, 0x33], 0x08, 0x00).exec(controller).await?;
+        Inquiry::new([0x33, 0x8b, 0x9e], 0x08, 0x00).exec(controller).await?;
 
         // Wait for InquiryComplete event
         inquiry_complete_channel.receive().await;
+
+        // Re-enable page scan after inquiry
+        write_scan_enable(controller, 0x02).await?;
 
         // Brief delay before next inquiry
         Timer::after(Duration::from_millis(100)).await;
