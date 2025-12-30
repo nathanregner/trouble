@@ -2,13 +2,13 @@
 #![no_main]
 
 use bt_hci::cmd::controller_baseband::{HostBufferSize, Reset, SetEventMask};
-use bt_hci::cmd::info::{ReadBdAddr, ReadLocalSupportedFeatures};
+use bt_hci::cmd::info::ReadBdAddr;
 use bt_hci::cmd::le::{LeReadBufferSize, LeSetRandomAddr};
 use bt_hci::cmd::link_control::Inquiry;
 use bt_hci::cmd::SyncCmd;
 use bt_hci::controller::{Controller, ControllerCmdSync};
-use bt_hci::event::{EventPacket, ExtendedInquiryResult, InquiryComplete, InquiryResult};
-use bt_hci::param::{BdAddr, EventMask, RemainingBytes};
+use bt_hci::event::{EventPacket, InquiryComplete, InquiryResult};
+use bt_hci::param::{BdAddr, EventMask};
 use bt_hci::{ControllerToHostPacket, FromHciBytes};
 use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
 use defmt::*;
@@ -99,13 +99,6 @@ where
     C: ControllerCmdSync<SetEventMask>,
     C: ControllerCmdSync<Inquiry>,
     C: ControllerCmdSync<HostBufferSize>,
-    C: ControllerCmdSync<ReadLocalSupportedFeatures>,
-    C: ControllerCmdSync<WriteScanEnable>,
-    C: ControllerCmdSync<WriteInquiryMode>,
-    C: ControllerCmdSync<WriteClassOfDevice>,
-    C: ControllerCmdSync<WriteInquiryScanActivity>,
-    C: ControllerCmdSync<WritePageScanActivity>,
-    C: ControllerCmdSync<WriteInquiryScanType>,
 {
     defmt::info!("resetting...");
     Reset::new().exec(controller).await?;
@@ -131,8 +124,7 @@ where
             .enable_disconnection_complete(true)
             .enable_encryption_change_v1(true)
             .enable_inquiry_complete(true)
-            .enable_inquiry_result(true)
-            .enable_ext_inquiry_result(true),
+            .enable_inquiry_result(true),
     )
     .exec(controller)
     .await?;
@@ -151,43 +143,9 @@ where
         device_address.raw()[5],
     );
 
-    info!("reading local supported features...");
-    let features = ReadLocalSupportedFeatures::new().exec(controller).await?;
-    info!("Features: {}", features);
-
-    // Set device class (Computer - Desktop workstation)
-    info!("setting class of device...");
-    write_class_of_device(controller, [0x00, 0x01, 0x04]).await?;
-
-    // Set inquiry scan activity (interval and window in 0.625ms units)
-    // Default: interval=0x1000 (2.56s), window=0x0012 (11.25ms)
-    info!("setting inquiry scan activity...");
-    WriteInquiryScanActivity::new(0x1000, 0x0012).exec(controller).await?;
-
-    // Set page scan activity
-    info!("setting page scan activity...");
-    WritePageScanActivity::new(0x0800, 0x0012).exec(controller).await?;
-
-    // Set inquiry scan type (0x00 = standard, 0x01 = interlaced)
-    info!("setting inquiry scan type...");
-    WriteInquiryScanType::new(0x01).exec(controller).await?;
-
-    // Set inquiry mode to standard (0x00)
-    // Note: Controller doesn't support Extended Inquiry (0x02), trying standard mode
-    info!("setting inquiry mode to 0x00 (standard)...");
-    write_inquiry_mode(controller, 0x00).await?;
-
-    // Enable page scan only initially so we're connectable but not discoverable during inquiry
-    // 0x00 = No scans, 0x01 = Inquiry scan only, 0x02 = Page scan only, 0x03 = Both
-    info!("enabling page scan only (connectable but not discoverable)...");
-    write_scan_enable(controller, 0x02).await?;
-
     info!("Starting continuous Bluetooth Classic inquiry...");
 
     loop {
-        // Disable all scanning during active inquiry
-        write_scan_enable(controller, 0x00).await?;
-
         // Send Inquiry command
         // LAP: GIAC 0x9E8B33 in little-endian = [0x33, 0x8B, 0x9E]
         // inquiry_length: 0x08 = 10.24 seconds (units of 1.28s)
@@ -196,9 +154,6 @@ where
 
         // Wait for InquiryComplete event
         inquiry_complete_channel.receive().await;
-
-        // Re-enable page scan after inquiry
-        write_scan_enable(controller, 0x02).await?;
 
         // Brief delay before next inquiry
         Timer::after(Duration::from_millis(100)).await;
@@ -229,100 +184,6 @@ where
     }
 }
 
-// Raw HCI command implementations for missing bt-hci commands
-// Using the bt_hci cmd! macro
-
-use bt_hci::cmd;
-
-cmd! {
-    /// WriteScanEnable command (OGF: 0x03, OCF: 0x001A)
-    WriteScanEnable(CONTROL_BASEBAND, 0x001A) {
-        WriteScanEnableParams {
-            scan_enable: u8,
-        }
-        Return = ();
-    }
-}
-
-cmd! {
-    /// WriteInquiryMode command (OGF: 0x03, OCF: 0x0045)
-    WriteInquiryMode(CONTROL_BASEBAND, 0x0045) {
-        WriteInquiryModeParams {
-            inquiry_mode: u8,
-        }
-        Return = ();
-    }
-}
-
-cmd! {
-    /// WriteClassOfDevice command (OGF: 0x03, OCF: 0x0024)
-    WriteClassOfDevice(CONTROL_BASEBAND, 0x0024) {
-        WriteClassOfDeviceParams {
-            class_of_device: [u8; 3],
-        }
-        Return = ();
-    }
-}
-
-cmd! {
-    /// WriteInquiryScanActivity command (OGF: 0x03, OCF: 0x001E)
-    WriteInquiryScanActivity(CONTROL_BASEBAND, 0x001E) {
-        WriteInquiryScanActivityParams {
-            inquiry_scan_interval: u16,
-            inquiry_scan_window: u16,
-        }
-        Return = ();
-    }
-}
-
-cmd! {
-    /// WritePageScanActivity command (OGF: 0x03, OCF: 0x001C)
-    WritePageScanActivity(CONTROL_BASEBAND, 0x001C) {
-        WritePageScanActivityParams {
-            page_scan_interval: u16,
-            page_scan_window: u16,
-        }
-        Return = ();
-    }
-}
-
-cmd! {
-    /// WriteInquiryScanType command (OGF: 0x03, OCF: 0x0043)
-    WriteInquiryScanType(CONTROL_BASEBAND, 0x0043) {
-        WriteInquiryScanTypeParams {
-            scan_type: u8,
-        }
-        Return = ();
-    }
-}
-
-async fn write_scan_enable<C>(controller: &C, mode: u8) -> Result<(), bt_hci::cmd::Error<C::Error>>
-where
-    C: ControllerCmdSync<WriteScanEnable>,
-{
-    WriteScanEnable::new(mode).exec(controller).await?;
-    Timer::after(Duration::from_millis(50)).await;
-    Ok(())
-}
-
-async fn write_inquiry_mode<C>(controller: &C, mode: u8) -> Result<(), bt_hci::cmd::Error<C::Error>>
-where
-    C: ControllerCmdSync<WriteInquiryMode>,
-{
-    WriteInquiryMode::new(mode).exec(controller).await?;
-    Timer::after(Duration::from_millis(50)).await;
-    Ok(())
-}
-
-async fn write_class_of_device<C>(controller: &C, class: [u8; 3]) -> Result<(), bt_hci::cmd::Error<C::Error>>
-where
-    C: ControllerCmdSync<WriteClassOfDevice>,
-{
-    WriteClassOfDevice::new(class).exec(controller).await?;
-    Timer::after(Duration::from_millis(50)).await;
-    Ok(())
-}
-
 async fn handle_event(
     event: EventPacket<'_>,
     inquiry_complete_channel: &Channel<CriticalSectionRawMutex, (), 1>,
@@ -331,136 +192,38 @@ async fn handle_event(
     use bt_hci::event::EventKind;
 
     match event.kind {
-        EventKind::InquiryResult => {
-            info!("Received InquiryResult event!");
-            // Handle standard inquiry results (fallback if Extended mode doesn't work)
-            match InquiryResult::from_hci_bytes_complete(event.data) {
-                Ok(result) => {
-                    info!("Parsed InquiryResult: {} responses", result.num_responses);
-                    let mut devices = discovered_devices.lock().await;
-                    for item in result.iter() {
-                        if !devices.contains(&item.bd_addr) {
-                            if let Some(class) = item.class_of_device {
-                                info!(
-                                    "Discovered (standard): {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} | Class: {:02x}{:02x}{:02x}",
-                                    item.bd_addr.raw()[0],
-                                    item.bd_addr.raw()[1],
-                                    item.bd_addr.raw()[2],
-                                    item.bd_addr.raw()[3],
-                                    item.bd_addr.raw()[4],
-                                    item.bd_addr.raw()[5],
-                                    class[0],
-                                    class[1],
-                                    class[2],
-                                );
-                            } else {
-                                info!(
-                                    "Discovered (standard): {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                                    item.bd_addr.raw()[0],
-                                    item.bd_addr.raw()[1],
-                                    item.bd_addr.raw()[2],
-                                    item.bd_addr.raw()[3],
-                                    item.bd_addr.raw()[4],
-                                    item.bd_addr.raw()[5],
-                                );
-                            }
-                            devices.insert(item.bd_addr).ok();
+        EventKind::InquiryResult => match InquiryResult::from_hci_bytes_complete(event.data) {
+            Ok(result) => {
+                let mut devices = discovered_devices.lock().await;
+                for item in result.iter() {
+                    if !devices.contains(&item.bd_addr) {
+                        if let Some(class) = item.class_of_device {
+                            info!(
+                                "Discovered: {:02x} | Class: {:02x}{:02x}{:02x}",
+                                item.bd_addr, class[0], class[1], class[2],
+                            );
+                        } else {
+                            info!("Discovered: {:02x}", item.bd_addr);
                         }
+                        devices.insert(item.bd_addr).ok();
                     }
                 }
-                Err(e) => warn!("Failed to parse InquiryResult: {:?}", e),
             }
-        }
-
-        EventKind::ExtendedInquiryResult => {
-            info!("Received ExtendedInquiryResult event!");
-            match ExtendedInquiryResult::from_hci_bytes_complete(event.data) {
-                Ok(result) => {
-                    info!("Parsed ExtendedInquiryResult");
-                    // Check if already seen
-                    let mut devices = discovered_devices.lock().await;
-                    if devices.contains(&result.bd_addr) {
-                        return;
-                    }
-
-                    // Parse device name from EIR data
-                    let name = parse_eir_device_name(result.eir_data);
-
-                    // Print discovery
-                    info!(
-                        "Discovered: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} | RSSI: {} dBm | Class: {:02x}{:02x}{:02x} | Name: {}",
-                        result.bd_addr.raw()[0],
-                        result.bd_addr.raw()[1],
-                        result.bd_addr.raw()[2],
-                        result.bd_addr.raw()[3],
-                        result.bd_addr.raw()[4],
-                        result.bd_addr.raw()[5],
-                        result.rssi,
-                        result.class_of_device[0],
-                        result.class_of_device[1],
-                        result.class_of_device[2],
-                        name.as_deref().unwrap_or("<unknown>")
-                    );
-
-                    // Mark as seen
-                    devices.insert(result.bd_addr).ok();
-                }
-                Err(e) => warn!("Failed to parse ExtendedInquiryResult: {:?}", e),
-            }
-        }
+            Err(e) => warn!("Failed to parse InquiryResult: {:?}", e),
+        },
 
         EventKind::InquiryComplete => match InquiryComplete::from_hci_bytes_complete(event.data) {
             Ok(complete) => {
                 if let Err(e) = complete.status.to_result() {
                     warn!("Inquiry error: {:?}", e);
-                } else {
-                    debug!("Inquiry cycle completed");
                 }
                 inquiry_complete_channel.try_send(()).ok();
             }
             Err(e) => warn!("Failed to parse InquiryComplete: {:?}", e),
         },
 
-        _ => {
-            // Log ALL events to see if we're missing something
-            info!("Received event: {:?} (kind: {})", event.kind, event.kind);
-        }
+        _ => {}
     }
-}
-
-fn parse_eir_device_name(eir_data: RemainingBytes) -> Option<heapless::String<64>> {
-    let mut data = eir_data.as_ref();
-
-    while !data.is_empty() {
-        if data.len() < 1 {
-            break;
-        }
-
-        let length = data[0] as usize;
-        if length == 0 {
-            break; // End of EIR data
-        }
-
-        if data.len() < 1 + length {
-            break; // Incomplete element
-        }
-
-        let element_type = data[1];
-        let value = &data[2..1 + length];
-
-        // 0x08 = Shortened Local Name, 0x09 = Complete Local Name
-        if element_type == 0x08 || element_type == 0x09 {
-            if let Ok(name) = core::str::from_utf8(value) {
-                if let Ok(owned_name) = heapless::String::try_from(name) {
-                    return Some(owned_name);
-                }
-            }
-        }
-
-        data = &data[1 + length..];
-    }
-
-    None
 }
 
 pub async fn run_tx<C>(_controller: &C) -> Result<(), bt_hci::cmd::Error<C::Error>>
