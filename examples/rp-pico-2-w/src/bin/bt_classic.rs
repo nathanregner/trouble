@@ -1,8 +1,8 @@
 #![no_std]
 #![no_main]
 
-use bt_hci::cmd::controller_baseband::{Reset, SetEventMask};
-use bt_hci::cmd::info::ReadBdAddr;
+use bt_hci::cmd::controller_baseband::{HostBufferSize, Reset, SetEventMask};
+use bt_hci::cmd::info::{ReadBdAddr, ReadLocalSupportedFeatures};
 use bt_hci::cmd::le::{LeReadBufferSize, LeSetRandomAddr};
 use bt_hci::cmd::link_control::Inquiry;
 use bt_hci::cmd::SyncCmd;
@@ -99,9 +99,19 @@ where
     C: ControllerCmdSync<Reset>,
     C: ControllerCmdSync<SetEventMask>,
     C: ControllerCmdSync<Inquiry>,
+    C: ControllerCmdSync<HostBufferSize>,
+    C: ControllerCmdSync<ReadLocalSupportedFeatures>,
 {
     defmt::info!("resetting...");
     Reset::new().exec(controller).await?;
+
+    const ACL_LEN: u16 = 255;
+    const ACL_N: u16 = 1;
+    info!(
+        "[host] configuring host buffers ({} packets of size {})",
+        ACL_N, ACL_LEN,
+    );
+    HostBufferSize::new(ACL_LEN, 0, ACL_N, 0).exec(controller).await?;
 
     // defmt::info!("setting random address...");
     // let addr = Address::random([0xff, 0x8f, 0x1b, 0x05, 0xe4, 0xff]);
@@ -124,9 +134,21 @@ where
 
     // let _ret = LeReadBufferSize::new().exec(controller).await?;
 
-    // defmt::info!("reading...");
-    // let device_address = ReadBdAddr::new().exec(controller).await?;
-    // defmt::dbg!(device_address);
+    info!("reading local BD_ADDR...");
+    let device_address = ReadBdAddr::new().exec(controller).await?;
+    info!(
+        "Local BD_ADDR: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        device_address.raw()[0],
+        device_address.raw()[1],
+        device_address.raw()[2],
+        device_address.raw()[3],
+        device_address.raw()[4],
+        device_address.raw()[5],
+    );
+
+    info!("reading local supported features...");
+    let features = ReadLocalSupportedFeatures::new().exec(controller).await?;
+    info!("Features: {}", features);
 
     // Note: WriteInquiryMode not available in bt-hci 0.6.0
     // The code handles both standard InquiryResult and ExtendedInquiryResult events
@@ -181,9 +203,11 @@ async fn handle_event(
 
     match event.kind {
         EventKind::InquiryResult => {
+            info!("Received InquiryResult event!");
             // Handle standard inquiry results (fallback if Extended mode doesn't work)
             match InquiryResult::from_hci_bytes_complete(event.data) {
                 Ok(result) => {
+                    info!("Parsed InquiryResult: {} responses", result.num_responses);
                     let mut devices = discovered_devices.lock().await;
                     for item in result.iter() {
                         if !devices.contains(&item.bd_addr) {
@@ -220,8 +244,10 @@ async fn handle_event(
         }
 
         EventKind::ExtendedInquiryResult => {
+            info!("Received ExtendedInquiryResult event!");
             match ExtendedInquiryResult::from_hci_bytes_complete(event.data) {
                 Ok(result) => {
+                    info!("Parsed ExtendedInquiryResult");
                     // Check if already seen
                     let mut devices = discovered_devices.lock().await;
                     if devices.contains(&result.bd_addr) {
@@ -267,8 +293,8 @@ async fn handle_event(
         },
 
         _ => {
-            debug!("Ignoring {}", event.kind);
-            // Other events can be logged at debug level if needed
+            // Log ALL events to see if we're missing something
+            info!("Received event: {:?} (kind: {})", event.kind, event.kind);
         }
     }
 }
