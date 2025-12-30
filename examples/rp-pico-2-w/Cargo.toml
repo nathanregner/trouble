@@ -36,7 +36,8 @@ rand_core = "0.9"
 rand_chacha = { version = "0.9", default-features = false }
 cyw43-firmware = { version = "0.1.0", features = ["bluetooth", "wifi"] }
 bt-hci = { version = "0.6.0", features = ["defmt", "embassy-time"] }
-embedded-io = { version = "0.7.1", features = ["defmt"] }
+embedded-io = "0.6.1"
+embedded-io-async = "0.6"
 
 [build-dependencies]
 reqwest = { version = "0.12.9", features = ["blocking"] }

@@ -141,7 +141,7 @@ dependencies = [
  "defmt 1.0.1",
  "embassy-sync",
  "embassy-time",
- "embedded-io 0.6.1",
+ "embedded-io",
  "embedded-io-async",
  "futures-intrusive",
  "heapless 0.9.1",
@@ -579,7 +579,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "embedded-hal-nb",
- "embedded-io 0.6.1",
+ "embedded-io",
  "embedded-io-async",
  "embedded-storage",
  "embedded-storage-async",
@@ -701,22 +701,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "embedded-io"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eb1aa714776b75c7e67e1da744b81a129b3ff919c8712b5e1b32252c1f07cc7"
-dependencies = [
- "defmt 1.0.1",
-]
-
-[[package]]
 name = "embedded-io-async"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ff09972d4073aa8c299395be75161d582e7629cd663171d62af73c8d50dba3f"
 dependencies = [
  "defmt 0.3.100",
- "embedded-io 0.6.1",
+ "embedded-io",
 ]
 
 [[package]]
@@ -2498,7 +2489,7 @@ dependencies = [
  "embassy-futures",
  "embassy-sync",
  "embassy-time",
- "embedded-io 0.6.1",
+ "embedded-io",
  "futures",
  "heapless 0.9.1",
  "rand_core 0.6.4",
@@ -2536,7 +2527,8 @@ dependencies = [
  "embassy-rp",
  "embassy-sync",
  "embassy-time",
- "embedded-io 0.7.1",
+ "embedded-io",
+ "embedded-io-async",
  "futures",
  "heapless 0.8.0",
  "panic-probe",

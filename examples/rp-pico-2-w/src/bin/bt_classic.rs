@@ -9,7 +9,7 @@ use bt_hci::cmd::SyncCmd;
 use bt_hci::controller::{Controller, ControllerCmdSync};
 use bt_hci::event::{EventPacket, ExtendedInquiryResult, InquiryComplete, InquiryResult};
 use bt_hci::param::{BdAddr, EventMask, RemainingBytes};
-use bt_hci::{ControllerToHostPacket, FromHciBytes};
+use bt_hci::{ControllerToHostPacket, FromHciBytes, HostToControllerPacket, PacketKind};
 use cyw43_pio::{PioSpi, RM2_CLOCK_DIVIDER};
 use defmt::*;
 use embassy_executor::Spawner;
@@ -101,6 +101,12 @@ where
     C: ControllerCmdSync<Inquiry>,
     C: ControllerCmdSync<HostBufferSize>,
     C: ControllerCmdSync<ReadLocalSupportedFeatures>,
+    C: ControllerCmdSync<WriteScanEnable>,
+    C: ControllerCmdSync<WriteInquiryMode>,
+    C: ControllerCmdSync<WriteClassOfDevice>,
+    C: ControllerCmdSync<WriteInquiryScanActivity>,
+    C: ControllerCmdSync<WritePageScanActivity>,
+    C: ControllerCmdSync<WriteInquiryScanType>,
 {
     defmt::info!("resetting...");
     Reset::new().exec(controller).await?;
@@ -150,9 +156,32 @@ where
     let features = ReadLocalSupportedFeatures::new().exec(controller).await?;
     info!("Features: {}", features);
 
-    // Note: WriteInquiryMode not available in bt-hci 0.6.0
-    // The code handles both standard InquiryResult and ExtendedInquiryResult events
-    // depending on what the controller supports/defaults to
+    // Set device class (Computer - Desktop workstation)
+    info!("setting class of device...");
+    write_class_of_device(controller, [0x00, 0x01, 0x04]).await?;
+
+    // Set inquiry scan activity (interval and window in 0.625ms units)
+    // Default: interval=0x1000 (2.56s), window=0x0012 (11.25ms)
+    info!("setting inquiry scan activity...");
+    WriteInquiryScanActivity::new(0x1000, 0x0012).exec(controller).await?;
+
+    // Set page scan activity
+    info!("setting page scan activity...");
+    WritePageScanActivity::new(0x0800, 0x0012).exec(controller).await?;
+
+    // Set inquiry scan type (0x00 = standard, 0x01 = interlaced)
+    info!("setting inquiry scan type...");
+    WriteInquiryScanType::new(0x01).exec(controller).await?;
+
+    // Set inquiry mode to standard (with RSSI would be 0x01, but controller doesn't support extended)
+    info!("setting inquiry mode to 0x01 (RSSI)...");
+    write_inquiry_mode(controller, 0x01).await?;
+
+    // Enable inquiry and page scan
+    // 0x00 = No scans, 0x01 = Inquiry scan only, 0x02 = Page scan only, 0x03 = Both
+    info!("enabling inquiry and page scan...");
+    write_scan_enable(controller, 0x03).await?;
+
     info!("Starting continuous Bluetooth Classic inquiry...");
 
     loop {
@@ -192,6 +221,100 @@ where
             Err(_) => error!("rx error"),
         }
     }
+}
+
+// Raw HCI command implementations for missing bt-hci commands
+// Using the bt_hci cmd! macro
+
+use bt_hci::cmd;
+
+cmd! {
+    /// WriteScanEnable command (OGF: 0x03, OCF: 0x001A)
+    WriteScanEnable(CONTROL_BASEBAND, 0x001A) {
+        WriteScanEnableParams {
+            scan_enable: u8,
+        }
+        Return = ();
+    }
+}
+
+cmd! {
+    /// WriteInquiryMode command (OGF: 0x03, OCF: 0x0045)
+    WriteInquiryMode(CONTROL_BASEBAND, 0x0045) {
+        WriteInquiryModeParams {
+            inquiry_mode: u8,
+        }
+        Return = ();
+    }
+}
+
+cmd! {
+    /// WriteClassOfDevice command (OGF: 0x03, OCF: 0x0024)
+    WriteClassOfDevice(CONTROL_BASEBAND, 0x0024) {
+        WriteClassOfDeviceParams {
+            class_of_device: [u8; 3],
+        }
+        Return = ();
+    }
+}
+
+cmd! {
+    /// WriteInquiryScanActivity command (OGF: 0x03, OCF: 0x001E)
+    WriteInquiryScanActivity(CONTROL_BASEBAND, 0x001E) {
+        WriteInquiryScanActivityParams {
+            inquiry_scan_interval: u16,
+            inquiry_scan_window: u16,
+        }
+        Return = ();
+    }
+}
+
+cmd! {
+    /// WritePageScanActivity command (OGF: 0x03, OCF: 0x001C)
+    WritePageScanActivity(CONTROL_BASEBAND, 0x001C) {
+        WritePageScanActivityParams {
+            page_scan_interval: u16,
+            page_scan_window: u16,
+        }
+        Return = ();
+    }
+}
+
+cmd! {
+    /// WriteInquiryScanType command (OGF: 0x03, OCF: 0x0043)
+    WriteInquiryScanType(CONTROL_BASEBAND, 0x0043) {
+        WriteInquiryScanTypeParams {
+            scan_type: u8,
+        }
+        Return = ();
+    }
+}
+
+async fn write_scan_enable<C>(controller: &C, mode: u8) -> Result<(), bt_hci::cmd::Error<C::Error>>
+where
+    C: ControllerCmdSync<WriteScanEnable>,
+{
+    WriteScanEnable::new(mode).exec(controller).await?;
+    Timer::after(Duration::from_millis(50)).await;
+    Ok(())
+}
+
+async fn write_inquiry_mode<C>(controller: &C, mode: u8) -> Result<(), bt_hci::cmd::Error<C::Error>>
+where
+    C: ControllerCmdSync<WriteInquiryMode>,
+{
+    WriteInquiryMode::new(mode).exec(controller).await?;
+    Timer::after(Duration::from_millis(50)).await;
+    Ok(())
+}
+
+async fn write_class_of_device<C>(controller: &C, class: [u8; 3]) -> Result<(), bt_hci::cmd::Error<C::Error>>
+where
+    C: ControllerCmdSync<WriteClassOfDevice>,
+{
+    WriteClassOfDevice::new(class).exec(controller).await?;
+    Timer::after(Duration::from_millis(50)).await;
+    Ok(())
 }
 
 async fn handle_event(
