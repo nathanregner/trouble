@@ -4,12 +4,18 @@ version = "0.1.0"
 edition = "2021"
 resolver = "2"
 
+[[bin]]
+name = "bt-classic"
+path = "./src/bin/bt_classic.rs"
+test = false
+
 [dependencies]
 embassy-executor = { version = "0.9", default-features = false, features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embassy-time = { version = "0.5", default-features = false, features = ["defmt", "defmt-timestamp-uptime"] }
 embassy-rp = { version = "0.9", features = ["defmt", "unstable-pac", "time-driver", "critical-section-impl", "rp235xa", "binary-info"] }
 embassy-futures = "0.1.2"
 embassy-sync = { version = "0.7", features = ["defmt"] }
+heapless = "0.8"
 
 futures = { version = "0.3", default-features = false, features = ["async-await"]}
 trouble-example-apps= { version = "0.1.0", path = "../apps", features = ["defmt"] }

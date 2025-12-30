@@ -2538,6 +2538,7 @@ dependencies = [
  "embassy-time",
  "embedded-io 0.7.1",
  "futures",
+ "heapless 0.8.0",
  "panic-probe",
  "portable-atomic",
  "rand_chacha",
