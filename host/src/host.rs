@@ -1032,42 +1032,84 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
         C: ControllerCmdSync<Disconnect>
             + ControllerCmdSync<SetEventMask>
             + ControllerCmdSync<SetEventMaskPage2>
-            + ControllerCmdSync<LeSetEventMask>
-            + ControllerCmdSync<LeSetRandomAddr>
+            // + ControllerCmdSync<LeSetEventMask>
+            // + ControllerCmdSync<LeSetRandomAddr>
             + ControllerCmdSync<HostBufferSize>
-            + ControllerCmdAsync<LeConnUpdate>
-            + ControllerCmdSync<LeReadFilterAcceptListSize>
-            + ControllerCmdSync<SetControllerToHostFlowControl>
+            // + ControllerCmdAsync<LeConnUpdate>
+            // + ControllerCmdSync<LeReadFilterAcceptListSize>
+            // + ControllerCmdSync<SetControllerToHostFlowControl>
             + ControllerCmdSync<Reset>
-            + ControllerCmdSync<LeCreateConnCancel>
-            + for<'t> ControllerCmdSync<LeSetAdvEnable>
-            + for<'t> ControllerCmdSync<LeSetExtAdvEnable<'t>>
-            + ControllerCmdSync<LeSetScanEnable>
-            + ControllerCmdSync<LeSetExtScanEnable>
-            + for<'t> ControllerCmdSync<HostNumberOfCompletedPackets<'t>>
-            + ControllerCmdSync<LeReadBufferSize>
-            + ControllerCmdSync<LeLongTermKeyRequestReply>
-            + ControllerCmdAsync<LeEnableEncryption>
+            // + ControllerCmdSync<LeCreateConnCancel>
+            // + for<'t> ControllerCmdSync<LeSetAdvEnable>
+            // + for<'t> ControllerCmdSync<LeSetExtAdvEnable<'t>>
+            // + ControllerCmdSync<LeSetScanEnable>
+            // + ControllerCmdSync<LeSetExtScanEnable>
+            // + for<'t> ControllerCmdSync<HostNumberOfCompletedPackets<'t>>
+            // + ControllerCmdSync<LeReadBufferSize>
+            // + ControllerCmdSync<LeLongTermKeyRequestReply>
+            // + ControllerCmdAsync<LeEnableEncryption>
             + ControllerCmdSync<ReadBdAddr>,
     {
         let host = &self.stack.host;
         info!("reset");
         Reset::new().exec(&host.controller).await?;
 
-        if let Some(addr) = host.address {
-            info!("set addr");
-            LeSetRandomAddr::new(addr.addr).exec(&host.controller).await?;
-        }
+        // if let Some(addr) = host.address {
+        //     info!("set addr");
+        //     SetRandomAddr::new(addr.addr).exec(&host.controller).await?;
+        // }
 
         info!("set event mask");
         SetEventMask::new(
             EventMask::new()
-                .enable_le_meta(true)
-                .enable_conn_request(true)
+                .enable_inquiry_complete(true)
+                .enable_inquiry_result(true)
                 .enable_conn_complete(true)
-                .enable_hardware_error(true)
+                .enable_conn_request(true)
                 .enable_disconnection_complete(true)
-                .enable_encryption_change_v1(true),
+                .enable_authentication_complete(true)
+                .enable_remote_name_request_complete(true)
+                .enable_encryption_change_v1(true)
+                .enable_change_conn_link_key_complete(true)
+                .enable_link_key_kind_changed(true)
+                .enable_read_remote_supported_features_complete(true)
+                .enable_read_remote_version_information_complete(true)
+                .enable_qos_setup_complete(true)
+                .enable_hardware_error(true)
+                .enable_flush_occurred(true)
+                .enable_role_change(true)
+                .enable_mode_change(true)
+                .enable_return_link_keys(true)
+                .enable_pin_code_request(true)
+                .enable_link_key_request(true)
+                .enable_link_key_notification(true)
+                .enable_loopback_cmd(true)
+                .enable_data_buffer_overflow(true)
+                .enable_max_slots_change(true)
+                .enable_read_clock_offset_complete(true)
+                .enable_conn_packet_kind_changed(true)
+                .enable_qos_violation(true)
+                .enable_page_scan_repetition_mode_change(true)
+                .enable_flow_specification_complete(true)
+                .enable_inquiry_result_with_rssi(true)
+                .enable_read_remote_ext_features_complete(true)
+                .enable_synchronous_conn_complete(true)
+                .enable_synchronous_conn_changed(true)
+                .enable_sniff_subrating(true)
+                .enable_ext_inquiry_result(true)
+                .enable_encryption_key_refresh_complete(true)
+                .enable_io_capability_request(true)
+                .enable_io_capability_response(true)
+                .enable_user_confirmation_request(true)
+                .enable_user_passkey_request(true)
+                .enable_remote_oob_data_request(true)
+                .enable_simple_pairing_complete(true)
+                .enable_link_supervision_timeout_changed(true)
+                .enable_enhanced_flush_complete(true)
+                .enable_user_passkey_notification(true)
+                .enable_keypress_notification(true)
+                .enable_remote_host_supported_features_notification(true)
+                .enable_le_meta(true),
         )
         .exec(&host.controller)
         .await?;
@@ -1077,22 +1119,22 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
             .exec(&host.controller)
             .await?;
 
-        let mask = LeEventMask::new()
-            .enable_le_conn_complete(true)
-            .enable_le_enhanced_conn_complete(true)
-            .enable_le_conn_update_complete(true)
-            .enable_le_adv_set_terminated(true)
-            .enable_le_adv_report(true)
-            .enable_le_scan_timeout(true)
-            .enable_le_ext_adv_report(true)
-            .enable_le_long_term_key_request(true)
-            .enable_le_phy_update_complete(true)
-            .enable_le_data_length_change(true);
+        // let mask = LeEventMask::new()
+        //     .enable_le_conn_complete(true)
+        //     .enable_le_enhanced_conn_complete(true)
+        //     .enable_le_conn_update_complete(true)
+        //     .enable_le_adv_set_terminated(true)
+        //     .enable_le_adv_report(true)
+        //     .enable_le_scan_timeout(true)
+        //     .enable_le_ext_adv_report(true)
+        //     .enable_le_long_term_key_request(true)
+        //     .enable_le_phy_update_complete(true)
+        //     .enable_le_data_length_change(true);
 
-        #[cfg(feature = "connection-params-update")]
-        let mask = mask.enable_le_remote_conn_parameter_request(true);
+        // #[cfg(feature = "connection-params-update")]
+        // let mask = mask.enable_le_remote_conn_parameter_request(true);
 
-        LeSetEventMask::new(mask).exec(&host.controller).await?;
+        // LeSetEventMask::new(mask).exec(&host.controller).await?;
 
         info!(
             "[host] using packet pool with MTU {} capacity {}",
@@ -1100,16 +1142,16 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
             P::capacity(),
         );
 
-        let ret = LeReadFilterAcceptListSize::new().exec(&host.controller).await?;
-        info!("[host] filter accept list size: {}", ret);
+        // let ret = LeReadFilterAcceptListSize::new().exec(&host.controller).await?;
+        // info!("[host] filter accept list size: {}", ret);
 
-        let ret = LeReadBufferSize::new().exec(&host.controller).await?;
-        info!(
-            "[host] setting txq to {}, fragmenting at {}",
-            ret.total_num_le_acl_data_packets as usize, ret.le_acl_data_packet_length as usize
-        );
-        host.connections
-            .set_link_credits(ret.total_num_le_acl_data_packets as usize);
+        // let ret = LeReadBufferSize::new().exec(&host.controller).await?;
+        // info!(
+        //     "[host] setting txq to {}, fragmenting at {}",
+        //     ret.total_num_le_acl_data_packets as usize, ret.le_acl_data_packet_length as usize
+        // );
+        // host.connections
+        //     .set_link_credits(ret.total_num_le_acl_data_packets as usize);
 
         const ACL_LEN: u16 = 255;
         const ACL_N: u16 = 1;

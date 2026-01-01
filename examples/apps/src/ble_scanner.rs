@@ -1,6 +1,7 @@
+use core::cell::RefCell;
+
 use bt_hci::cmd::le::LeSetScanParams;
 use bt_hci::controller::ControllerCmdSync;
-use core::cell::RefCell;
 use embassy_futures::join::join;
 use embassy_time::{Duration, Timer};
 use heapless::Deque;
@@ -55,7 +56,12 @@ impl EventHandler for Printer {
         let mut seen = self.seen.borrow_mut();
         while let Some(Ok(report)) = it.next() {
             if seen.iter().find(|b| b.raw() == report.addr.raw()).is_none() {
-                info!("discovered: {:x}", MacAddress(report.addr));
+                let addr = BdAddr::new([0x66, 0x8a, 0x9f, 0xe2, 0x1f, 0x00]);
+                if report.addr == addr {
+                    error!("discovered: {:x}", MacAddress(report.addr));
+                } else {
+                    info!("discovered: {:x}", MacAddress(report.addr));
+                }
                 if seen.is_full() {
                     seen.pop_front();
                 }
@@ -69,15 +75,16 @@ struct MacAddress(BdAddr);
 
 impl defmt::Format for MacAddress {
     fn format(&self, fmt: defmt::Formatter) {
+        let octets = self.0.raw();
         defmt::write!(
             fmt,
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            self.0.raw()[0],
-            self.0.raw()[1],
-            self.0.raw()[2],
-            self.0.raw()[3],
-            self.0.raw()[4],
-            self.0.raw()[5],
+            octets[0],
+            octets[1],
+            octets[2],
+            octets[3],
+            octets[4],
+            octets[5],
         )
     }
 }
