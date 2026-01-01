@@ -28,7 +28,7 @@ use bt_hci::event::le::{
     LeAdvertisingSetTerminated, LeConnectionComplete, LeConnectionUpdateComplete, LeDataLengthChange,
     LeEnhancedConnectionComplete, LeEventKind, LeEventPacket, LePhyUpdateComplete, LeRemoteConnectionParameterRequest,
 };
-use bt_hci::event::{DisconnectionComplete, EventKind, NumberOfCompletedPackets, Vendor};
+use bt_hci::event::{DisconnectionComplete, EventKind, InquiryComplete, InquiryResult, NumberOfCompletedPackets, Vendor};
 use bt_hci::param::{
     AddrKind, AdvHandle, AdvSet, BdAddr, ConnHandle, DisconnectReason, EventMask, EventMaskPage2, FilterDuplicates,
     LeConnRole, LeEventMask, Status,
@@ -682,6 +682,10 @@ pub trait EventHandler {
     /// Handle extended advertising reports
     #[cfg(feature = "scan")]
     fn on_ext_adv_reports(&self, reports: bt_hci::param::LeExtAdvReportsIter) {}
+    /// Handle inquiry results
+    fn on_inquiry_result(&self, _result: &bt_hci::event::InquiryResult) {}
+    /// Handle inquiry complete
+    fn on_inquiry_complete(&self, _complete: &bt_hci::event::InquiryComplete) {}
 }
 
 struct DummyHandler;
@@ -1008,6 +1012,14 @@ impl<'d, C: Controller, P: PacketPool> RxRunner<'d, C, P> {
                             let vendor = unwrap!(Vendor::from_hci_bytes_complete(event.data));
                             event_handler.on_vendor(&vendor);
                         }
+                        EventKind::InquiryResult => {
+                            let result = unwrap!(InquiryResult::from_hci_bytes_complete(event.data));
+                            event_handler.on_inquiry_result(&result);
+                        }
+                        EventKind::InquiryComplete => {
+                            let complete = unwrap!(InquiryComplete::from_hci_bytes_complete(event.data));
+                            event_handler.on_inquiry_complete(&complete);
+                        }
                         EventKind::EncryptionChangeV1 => {
                             host.connections.handle_security_hci_event(event)?;
                         }
@@ -1172,7 +1184,7 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
         */
 
         let _ = host.initialized.init(InitialState {
-            acl_max: ret.le_acl_data_packet_length as usize,
+            acl_max: ACL_LEN as usize,
         });
         info!("[host] initialized");
 
@@ -1234,37 +1246,39 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
                 }
                 Either3::Third(states) => match states {
                     Either4::First(_) => {
-                        trace!("[host] cancel connection create");
-                        // trace!("[host] cancelling create connection");
-                        if host.command(LeCreateConnCancel::new()).await.is_err() {
-                            warn!("[host] error cancelling connection");
-                        }
+                        trace!("[host] cancel connection create (BT Classic - no-op)");
+                        // For Bluetooth Classic, we don't have LeCreateConnCancel
+                        // if host.command(LeCreateConnCancel::new()).await.is_err() {
+                        //     warn!("[host] error cancelling connection");
+                        // }
                         // Signal to ensure no one is stuck
                         host.connect_command_state.canceled();
                     }
                     Either4::Second(ext) => {
-                        trace!("[host] disabling advertising");
-                        if ext {
-                            host.command(LeSetExtAdvEnable::new(false, &[])).await?
-                        } else {
-                            host.command(LeSetAdvEnable::new(false)).await?
-                        }
+                        trace!("[host] disabling advertising (BT Classic - no-op)");
+                        // For Bluetooth Classic, we don't use LE advertising commands
+                        // if ext {
+                        //     host.command(LeSetExtAdvEnable::new(false, &[])).await?
+                        // } else {
+                        //     host.command(LeSetAdvEnable::new(false)).await?
+                        // }
                         host.advertise_command_state.canceled();
                     }
                     Either4::Third(ext) => {
-                        trace!("[host] disabling scanning");
-                        if ext {
-                            // TODO: A bit opinionated but not more than before
-                            host.command(LeSetExtScanEnable::new(
-                                false,
-                                FilterDuplicates::Disabled,
-                                bt_hci::param::Duration::from_secs(0),
-                                bt_hci::param::Duration::from_secs(0),
-                            ))
-                            .await?;
-                        } else {
-                            host.command(LeSetScanEnable::new(false, false)).await?;
-                        }
+                        trace!("[host] disabling scanning (BT Classic - no-op)");
+                        // For Bluetooth Classic, inquiry stops automatically after timeout
+                        // No explicit disable command needed
+                        // if ext {
+                        //     host.command(LeSetExtScanEnable::new(
+                        //         false,
+                        //         FilterDuplicates::Disabled,
+                        //         bt_hci::param::Duration::from_secs(0),
+                        //         bt_hci::param::Duration::from_secs(0),
+                        //     ))
+                        //     .await?;
+                        // } else {
+                        //     host.command(LeSetScanEnable::new(false, false)).await?;
+                        // }
                         host.scan_command_state.canceled();
                     }
                     Either4::Fourth(request) => {

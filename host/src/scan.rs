@@ -3,6 +3,7 @@ use bt_hci::cmd::le::{
     LeAddDeviceToFilterAcceptList, LeClearFilterAcceptList, LeSetExtScanEnable, LeSetExtScanParams, LeSetScanEnable,
     LeSetScanParams,
 };
+use bt_hci::cmd::link_control::Inquiry;
 use bt_hci::controller::{Controller, ControllerCmdSync};
 use bt_hci::param::{AddrKind, FilterDuplicates, ScanningPhy};
 pub use bt_hci::param::{LeAdvReportsIter, LeExtAdvReportsIter};
@@ -133,6 +134,42 @@ impl<'d, C: Controller, P: PacketPool> Scanner<'d, C, P> {
             done: false,
         })
     }
+
+    /// Performs a Bluetooth Classic inquiry to discover devices.
+    ///
+    /// The inquiry will run for the duration specified by the inquiry_length parameter
+    /// (in units of 1.28s). Results are received via the InquiryResult events handled
+    /// by the EventHandler's on_inquiry_result method.
+    ///
+    /// # Arguments
+    /// * `lap` - Limited/General Inquiry Access Code (typically [0x33, 0x8b, 0x9e] for GIAC)
+    /// * `inquiry_length` - Duration in units of 1.28s (e.g., 0x08 = ~10 seconds)
+    /// * `num_responses` - Maximum number of responses (0 for unlimited)
+    pub async fn inquiry(
+        &mut self,
+        lap: [u8; 3],
+        inquiry_length: u8,
+        num_responses: u8,
+    ) -> Result<InquirySession<'_>, BleHostError<C::Error>>
+    where
+        C: ControllerCmdSync<Inquiry>,
+    {
+        let host = &self.central.stack.host;
+        let drop = crate::host::OnDrop::new(|| {
+            host.scan_command_state.cancel(false);
+        });
+        host.scan_command_state.request().await;
+
+        host.command(Inquiry::new(lap, inquiry_length, num_responses))
+            .await?;
+
+        drop.defuse();
+        Ok(InquirySession {
+            command_state: &self.central.stack.host.scan_command_state,
+            deadline: Some(Instant::now() + embassy_time::Duration::from_millis((inquiry_length as u64) * 1280)),
+            done: false,
+        })
+    }
 }
 
 /// Handle to an active advertiser which can accept connections.
@@ -145,5 +182,20 @@ pub struct ScanSession<'d, const EXTENDED: bool> {
 impl<const EXTENDED: bool> Drop for ScanSession<'_, EXTENDED> {
     fn drop(&mut self) {
         self.command_state.cancel(EXTENDED);
+    }
+}
+
+/// Handle to an active Bluetooth Classic inquiry session.
+pub struct InquirySession<'d> {
+    command_state: &'d CommandState<bool>,
+    deadline: Option<Instant>,
+    done: bool,
+}
+
+impl Drop for InquirySession<'_> {
+    fn drop(&mut self) {
+        // For Bluetooth Classic, inquiry stops automatically after timeout
+        // Just signal completion
+        self.command_state.cancel(false);
     }
 }
