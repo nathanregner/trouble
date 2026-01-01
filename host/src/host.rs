@@ -29,7 +29,8 @@ use bt_hci::event::le::{
     LeEnhancedConnectionComplete, LeEventKind, LeEventPacket, LePhyUpdateComplete, LeRemoteConnectionParameterRequest,
 };
 use bt_hci::event::{
-    DisconnectionComplete, EventKind, InquiryComplete, InquiryResult, NumberOfCompletedPackets, Vendor,
+    ConnectionComplete, DisconnectionComplete, EventKind, InquiryComplete, InquiryResult, NumberOfCompletedPackets,
+    Vendor,
 };
 use bt_hci::param::{
     AddrKind, AdvHandle, AdvSet, BdAddr, ConnHandle, DisconnectReason, EventMask, EventMaskPage2, FilterDuplicates,
@@ -258,11 +259,6 @@ where
                         handle, peer_addr
                     );
 
-                    #[cfg(feature = "log")]
-                    debug!(
-                        "[host] connection with handle {:?} established to {:02x?}",
-                        handle, peer_addr
-                    );
                     let mut m = self.metrics.borrow_mut();
                     m.connect_events = m.connect_events.wrapping_add(1);
                 }
@@ -974,6 +970,26 @@ impl<'d, C: Controller, P: PacketPool> RxRunner<'d, C, P> {
                                 }
                             }
                         }
+
+                        EventKind::ConnectionComplete => {
+                            let e = unwrap!(ConnectionComplete::from_hci_bytes_complete(event.data));
+                            if !host.handle_connection(
+                                e.status,
+                                e.handle,
+                                AddrKind::PUBLIC,
+                                e.bd_addr,
+                                LeConnRole::Peripheral,
+                            ) {
+                                let _ = host
+                                    .command(Disconnect::new(
+                                        e.handle,
+                                        DisconnectReason::RemoteDeviceTerminatedConnLowResources,
+                                    ))
+                                    .await;
+                                host.connect_command_state.canceled();
+                            }
+                        }
+
                         EventKind::DisconnectionComplete => {
                             let e = unwrap!(DisconnectionComplete::from_hci_bytes_complete(event.data));
                             let handle = e.handle;
@@ -1027,12 +1043,15 @@ impl<'d, C: Controller, P: PacketPool> RxRunner<'d, C, P> {
                         EventKind::EncryptionChangeV1 => {
                             host.connections.handle_security_hci_event(event)?;
                         }
-                        // Ignore
-                        _ => {}
+                        event => {
+                            debug!("Ignoring event {}", event);
+                        }
                     }
                 }
                 // Ignore
-                Ok(_) => {}
+                Ok(packet) => {
+                    debug!("Ignoring packet {}", packet);
+                }
                 Err(e) => {
                     return Err(BleHostError::Controller(e));
                 }
