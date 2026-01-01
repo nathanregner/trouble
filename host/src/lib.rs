@@ -449,6 +449,7 @@ pub trait Controller:
     + ControllerCmdSync<LeLongTermKeyRequestReply>
     + ControllerCmdAsync<LeEnableEncryption>
     + ControllerCmdSync<ReadBdAddr>
+    + ControllerCmdSync<InquiryCancel>
 {
 }
 
@@ -485,7 +486,8 @@ impl<
             + for<'t> ControllerCmdSync<LeSetScanResponseData>
             + ControllerCmdSync<LeLongTermKeyRequestReply>
             + ControllerCmdAsync<LeEnableEncryption>
-            + ControllerCmdSync<ReadBdAddr>,
+            + ControllerCmdSync<ReadBdAddr>
+            + ControllerCmdSync<InquiryCancel>,
     > Controller for C
 {
 }

@@ -10,6 +10,12 @@ bench = false
 doctest = false
 test = false
 
+[[bin]]
+name = "ble_scanner"
+bench = false
+doctest = false
+test = false
+
 [dependencies]
 embassy-executor = { version = "0.9", default-features = false, features = ["arch-cortex-m", "executor-thread", "executor-interrupt", "defmt"] }
 embassy-time = { version = "0.5", default-features = false, features = ["defmt", "defmt-timestamp-uptime"] }

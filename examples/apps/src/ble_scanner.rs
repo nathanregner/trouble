@@ -42,7 +42,13 @@ where
             // LAP: GIAC 0x9E8B33 in little-endian = [0x33, 0x8B, 0x9E]
             // inquiry_length: 0x08 = 10.24 seconds (units of 1.28s)
             // num_responses: 0x00 = unlimited
-            match scanner.inquiry(0x08, 0x00).await {
+            match scanner
+                .inquiry(InquiryConfig {
+                    inquiry_length: 0x08,
+                    num_responses: None,
+                })
+                .await
+            {
                 Ok(_session) => {
                     // Inquiry running, wait for it to complete
                     Timer::after(Duration::from_secs(11)).await;
