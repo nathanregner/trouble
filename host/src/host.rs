@@ -16,7 +16,7 @@ use bt_hci::cmd::le::{
     LeReadFilterAcceptListSize, LeSetAdvEnable, LeSetEventMask, LeSetExtAdvEnable, LeSetExtScanEnable, LeSetRandomAddr,
     LeSetScanEnable,
 };
-use bt_hci::cmd::link_control::Disconnect;
+use bt_hci::cmd::link_control::{Disconnect, InquiryCancel};
 use bt_hci::cmd::{AsyncCmd, SyncCmd};
 use bt_hci::controller::{blocking, Controller, ControllerCmdAsync, ControllerCmdSync};
 use bt_hci::data::{AclBroadcastFlag, AclPacket, AclPacketBoundary};
@@ -28,7 +28,9 @@ use bt_hci::event::le::{
     LeAdvertisingSetTerminated, LeConnectionComplete, LeConnectionUpdateComplete, LeDataLengthChange,
     LeEnhancedConnectionComplete, LeEventKind, LeEventPacket, LePhyUpdateComplete, LeRemoteConnectionParameterRequest,
 };
-use bt_hci::event::{DisconnectionComplete, EventKind, InquiryComplete, InquiryResult, NumberOfCompletedPackets, Vendor};
+use bt_hci::event::{
+    DisconnectionComplete, EventKind, InquiryComplete, InquiryResult, NumberOfCompletedPackets, Vendor,
+};
 use bt_hci::param::{
     AddrKind, AdvHandle, AdvSet, BdAddr, ConnHandle, DisconnectReason, EventMask, EventMaskPage2, FilterDuplicates,
     LeConnRole, LeEventMask, Status,
@@ -727,7 +729,8 @@ impl<'d, C: Controller, P: PacketPool> Runner<'d, C, P> {
             + ControllerCmdSync<LeReadBufferSize>
             + ControllerCmdSync<LeLongTermKeyRequestReply>
             + ControllerCmdAsync<LeEnableEncryption>
-            + ControllerCmdSync<ReadBdAddr>,
+            + ControllerCmdSync<ReadBdAddr>
+            + ControllerCmdSync<InquiryCancel>,
     {
         let dummy = DummyHandler;
         self.run_with_handler(&dummy).await
@@ -737,6 +740,7 @@ impl<'d, C: Controller, P: PacketPool> Runner<'d, C, P> {
     pub async fn run_with_handler<E: EventHandler>(&mut self, event_handler: &E) -> Result<(), BleHostError<C::Error>>
     where
         C: ControllerCmdSync<Disconnect>
+            + ControllerCmdSync<InquiryCancel>
             + ControllerCmdSync<SetEventMask>
             + ControllerCmdSync<SetEventMaskPage2>
             + ControllerCmdSync<LeSetEventMask>
@@ -1044,6 +1048,7 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
         C: ControllerCmdSync<Disconnect>
             + ControllerCmdSync<SetEventMask>
             + ControllerCmdSync<SetEventMaskPage2>
+            + ControllerCmdSync<InquiryCancel>
             // + ControllerCmdSync<LeSetEventMask>
             // + ControllerCmdSync<LeSetRandomAddr>
             + ControllerCmdSync<HostBufferSize>
@@ -1265,27 +1270,16 @@ impl<'d, C: Controller, P: PacketPool> ControlRunner<'d, C, P> {
                         host.advertise_command_state.canceled();
                     }
                     Either4::Third(ext) => {
-                        trace!("[host] disabling scanning (BT Classic - no-op)");
-                        // For Bluetooth Classic, inquiry stops automatically after timeout
-                        // No explicit disable command needed
-                        // if ext {
-                        //     host.command(LeSetExtScanEnable::new(
-                        //         false,
-                        //         FilterDuplicates::Disabled,
-                        //         bt_hci::param::Duration::from_secs(0),
-                        //         bt_hci::param::Duration::from_secs(0),
-                        //     ))
-                        //     .await?;
-                        // } else {
-                        //     host.command(LeSetScanEnable::new(false, false)).await?;
-                        // }
+                        trace!("[host] cancel scanning");
+                        host.command(InquiryCancel::new()).await?;
                         host.scan_command_state.canceled();
                     }
                     Either4::Fourth(request) => {
                         #[cfg(feature = "security")]
                         {
-                            let event_data = request.unwrap_or(SecurityEventData::Timeout);
-                            host.connections.handle_security_event(host, event_data).await?;
+                            todo!()
+                            // let event_data = request.unwrap_or(SecurityEventData::Timeout);
+                            // host.connections.handle_security_event(host, event_data).await?;
                         }
                     }
                 },
