@@ -1,5 +1,7 @@
 //! BLE connection.
 
+use core::num::{NonZeroU8, NonZeroUsize};
+
 use bt_hci::cmd::le::{LeConnUpdate, LeReadLocalSupportedFeatures, LeReadPhy, LeSetDataLength, LeSetPhy};
 use bt_hci::cmd::status::ReadRssi;
 use bt_hci::controller::{ControllerCmdAsync, ControllerCmdSync};
@@ -608,4 +610,12 @@ fn into_le_conn_update(handle: ConnHandle, params: &ConnectParams) -> LeConnUpda
         bt_hci_duration(params.min_event_length),
         bt_hci_duration(params.max_event_length),
     )
+}
+
+/// Scan/connect configuration.
+pub struct InquiryConfig {
+    /// Duration in units of 1.28 seconds
+    pub inquiry_length: u8,
+    ///  Maximum number of responses
+    pub num_responses: Option<NonZeroU8>,
 }

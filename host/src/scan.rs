@@ -11,6 +11,7 @@ use embassy_time::Instant;
 
 use crate::command::CommandState;
 use crate::connection::ScanConfig;
+use crate::prelude::InquiryConfig;
 use crate::{bt_hci_duration, BleHostError, Central, PacketPool};
 
 /// A scanner that wraps a central to provide additional functionality
@@ -142,15 +143,9 @@ impl<'d, C: Controller, P: PacketPool> Scanner<'d, C, P> {
     /// by the EventHandler's on_inquiry_result method.
     ///
     /// # Arguments
-    /// * `lap` - Limited/General Inquiry Access Code (typically [0x33, 0x8b, 0x9e] for GIAC)
     /// * `inquiry_length` - Duration in units of 1.28s (e.g., 0x08 = ~10 seconds)
     /// * `num_responses` - Maximum number of responses (0 for unlimited)
-    pub async fn inquiry(
-        &mut self,
-        lap: [u8; 3],
-        inquiry_length: u8,
-        num_responses: u8,
-    ) -> Result<InquirySession<'_>, BleHostError<C::Error>>
+    pub async fn inquiry(&mut self, config: InquiryConfig) -> Result<InquirySession<'_>, BleHostError<C::Error>>
     where
         C: ControllerCmdSync<Inquiry>,
     {
@@ -160,14 +155,17 @@ impl<'d, C: Controller, P: PacketPool> Scanner<'d, C, P> {
         });
         host.scan_command_state.request().await;
 
-        host.command(Inquiry::new(lap, inquiry_length, num_responses))
-            .await?;
+        host.command(Inquiry::new(
+            [0x33, 0x8b, 0x9e], // General Inquiry Access Code, little endian
+            config.inquiry_length,
+            config.num_responses.map(u8::from).unwrap_or_default(),
+        ))
+        .await?;
 
         drop.defuse();
         Ok(InquirySession {
             command_state: &self.central.stack.host.scan_command_state,
-            deadline: Some(Instant::now() + embassy_time::Duration::from_millis((inquiry_length as u64) * 1280)),
-            done: false,
+            deadline: Some(Instant::now() + embassy_time::Duration::from_millis((config.inquiry_length as u64) * 1280)),
         })
     }
 }
@@ -189,7 +187,6 @@ impl<const EXTENDED: bool> Drop for ScanSession<'_, EXTENDED> {
 pub struct InquirySession<'d> {
     command_state: &'d CommandState<bool>,
     deadline: Option<Instant>,
-    done: bool,
 }
 
 impl Drop for InquirySession<'_> {
