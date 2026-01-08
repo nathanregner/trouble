@@ -1,3 +1,5 @@
+use std::any::Any;
+
 // Use with any serial HCI
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use log::*;
@@ -12,6 +14,11 @@ async fn main() {
         .filter_level(log::LevelFilter::Trace)
         .format_timestamp_nanos()
         .init();
+
+    let ports = tokio_serial::available_ports().unwrap();
+    for port in ports {
+        dbg!(port);
+    }
 
     let baudrate = 1000000;
 
