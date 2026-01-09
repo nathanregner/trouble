@@ -5,11 +5,21 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-tokio = { version = "1", features = ["io-util", "net", "rt", "macros", "signal", "sync"] }
+tokio = { version = "1", features = [
+  "io-util",
+  "net",
+  "rt",
+  "macros",
+  "signal",
+  "sync",
+] }
 embedded-io = { version = "0.6.1", features = ["std"] }
 libc = "0.2"
 bt-hci = "0.6"
-trouble-example-apps = { version = "0.1.0", path = "../apps", features = ["log", "std"] }
+trouble-example-apps = { version = "0.1.0", path = "../apps", features = [
+  "log",
+  "std",
+] }
 trouble-host = { path = "../../host", features = ["scan"] }
 embassy-time = { version = "0.5", features = ["std", "generic-queue-8"] }
 rand = { version = "0.8.5", features = ["getrandom"] }
@@ -19,9 +29,7 @@ critical-section = { version = "1", features = ["std"] }
 bt-hci-linux = { version = "0.1.0", path = "../../bt-hci-linux" }
 
 [features]
-security = [
-    "trouble-example-apps/security",
-]
+security = ["trouble-example-apps/security"]
 
 [[bin]]
 name = "ble_bas_central_sec"
