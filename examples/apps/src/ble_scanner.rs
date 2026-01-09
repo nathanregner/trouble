@@ -1,4 +1,5 @@
 use core::cell::RefCell;
+use std::fmt::LowerHex;
 
 use bt_hci::cmd::link_control::Inquiry;
 use bt_hci::controller::ControllerCmdSync;
@@ -117,6 +118,7 @@ impl EventHandler for Printer {
 
 struct MacAddress(BdAddr);
 
+#[cfg(feature = "defmt")]
 impl defmt::Format for MacAddress {
     fn format(&self, fmt: defmt::Formatter) {
         let octets = self.0.raw();
@@ -130,5 +132,24 @@ impl defmt::Format for MacAddress {
             octets[4],
             octets[5],
         )
+    }
+}
+
+#[cfg(feature = "log")]
+impl core::fmt::Display for MacAddress {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> std::fmt::Result {
+        let octets = self.0.raw();
+        write!(
+            f,
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            octets[0], octets[1], octets[2], octets[3], octets[4], octets[5],
+        )
+    }
+}
+
+#[cfg(feature = "log")]
+impl LowerHex for MacAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        core::fmt::Display::fmt(self, f)
     }
 }

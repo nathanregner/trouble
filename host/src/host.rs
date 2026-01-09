@@ -1044,13 +1044,13 @@ impl<'d, C: Controller, P: PacketPool> RxRunner<'d, C, P> {
                             host.connections.handle_security_hci_event(event)?;
                         }
                         event => {
-                            debug!("Ignoring event {}", event);
+                            debug!("Ignoring event {:?}", event);
                         }
                     }
                 }
                 // Ignore
                 Ok(packet) => {
-                    debug!("Ignoring packet {}", packet);
+                    debug!("Ignoring packet {:?}", packet);
                 }
                 Err(e) => {
                     return Err(BleHostError::Controller(e));

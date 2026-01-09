@@ -1,6 +1,7 @@
 use embassy_futures::join::join;
 use embassy_time::{Duration, Timer};
-use trouble_host::{prelude::*, scan};
+use trouble_host::prelude::*;
+use trouble_host::scan;
 
 /// Max number of connections
 const CONNECTIONS_MAX: usize = 1;
@@ -52,7 +53,7 @@ where
                 Err(err) => {
                     match err {
                         BleHostError::Controller(err) => warn!("Controller error"),
-                        BleHostError::BleHost(err) => warn!("BleHost: {}", err),
+                        BleHostError::BleHost(err) => warn!("BleHost error: "),
                     }
                     continue;
                 }
